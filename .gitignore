@@ -1,0 +1,23 @@
+# macOS metadata
+.DS_Store
+._.DS_Store
+._*
+
+# Compiled binaries
+*.exe
+*.app
+DevoirBibliotheque
+DevoirBibliotheque.app/
+
+# IDE
+.vscode/
+
+# Go build cache
+/vendor/
+
+# Fyne generated files
+fyne_metadata_init.go
+icon.ico
+
+# Documents académiques
+*.pdf
