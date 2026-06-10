@@ -1,4 +1,4 @@
-# Gestion Bibliothèque — IFT2935
+# Library Management
 
 ![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?style=flat&logo=postgresql&logoColor=white)
@@ -6,76 +6,75 @@
 ![GORM](https://img.shields.io/badge/GORM-00ACD7?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat)
 
-Application de gestion de bibliothèque développée dans le cadre du cours **IFT2935 — Bases de données** (Hiver 2025). Elle permet d'interroger une base PostgreSQL via une interface graphique native construite avec Fyne.
+A desktop library management application built with Go and Fyne, using PostgreSQL as the database backend.
 
 ---
 
-## Aperçu
+## Screenshots
 
-| Connexion | Livres en retard |
+| Login | Overdue Books |
 |:---------:|:----------------:|
-| ![Connexion](assets/screenshot_connexion.png) | ![Retard](assets/screenshot_retard.png) |
+| ![Login](assets/screenshot_connexion.png) | ![Overdue](assets/screenshot_retard.png) |
 
-| Emprunts par livre | Situation des abonnés |
+| Loans per Book | Member Status |
 |:-----------------:|:--------------------:|
-| ![Emprunts](assets/screenshot_emprunts_livr.png) | ![Situation](assets/screenshot_situation.png) |
-
-
----
-
-## Fonctionnalités
-
-- Connexion à une base PostgreSQL via un formulaire
-- Affichage des **emprunts en retard** (> 14 jours sans retour)
-- Classement des **auteurs les plus populaires** par nombre d'emprunts
-- Calcul de la **durée moyenne des emprunts**
-- Liste des **livres jamais empruntés**
-- Statistiques des **emprunts par année**
-- **Répartition des emprunts par genre** littéraire
-- Nombre d'**emprunts par livre**
-- **Situation de chaque abonné** (livres en cours, retards)
+| ![Loans](assets/screenshot_emprunts_livr.png) | ![Status](assets/screenshot_situation.png) |
 
 ---
 
-## Stack technique
+## Features
 
-| Composant | Technologie |
+- Connect to a PostgreSQL database via a login form
+- View **overdue loans** (unreturned after 14 days)
+- Rank **most popular authors** by number of loans
+- Calculate **average loan duration**
+- List **books never borrowed**
+- **Loans by year** statistics
+- **Loans by literary genre** breakdown
+- **Loans per book** count
+- **Member status** overview (active loans, overdue)
+
+---
+
+## Tech Stack
+
+| Component | Technology |
 |-----------|-------------|
-| Langage   | Go 1.24+    |
-| Interface | [Fyne v2](https://fyne.io/) |
+| Language  | Go 1.24+    |
+| UI        | [Fyne v2](https://fyne.io/) |
 | ORM       | [GORM v1](https://gorm.io/) |
-| Base de données | PostgreSQL 17 |
+| Database  | PostgreSQL 17 |
 
 ---
 
-## Prérequis
+## Prerequisites
 
 1. **Go 1.24.2+** — [golang.org/dl](https://golang.org/dl/)
 2. **PostgreSQL** — [postgresql.org/download](https://www.postgresql.org/download/)
-3. **Compilateur C** (requis par Fyne via CGo)
-   - Windows : [MinGW-w64](https://www.mingw-w64.org/)
-   - macOS : Xcode Command Line Tools (`xcode-select --install`)
-   - Linux : `gcc` (`apt install gcc`)
-4. **Dépendances système Fyne** — voir [docs.fyne.io/started](https://docs.fyne.io/started/)
+3. **C compiler** (required by Fyne via CGo)
+   - Windows: [MinGW-w64](https://www.mingw-w64.org/)
+   - macOS: Xcode Command Line Tools (`xcode-select --install`)
+   - Linux: `gcc` (`apt install gcc`)
+4. **Fyne system dependencies** — see [docs.fyne.io/started](https://docs.fyne.io/started/)
 
 ---
 
 ## Installation
 
-### 1. Cloner le dépôt
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/NizarLakhder/IFT2935Projet.git
-cd IFT2935Projet
+git clone https://github.com/NizarLakhder/library-management.git
+cd library-management
 ```
 
-### 2. Télécharger les dépendances Go
+### 2. Download Go dependencies
 
 ```bash
 go mod download
 ```
 
-### 3. Créer et configurer la base de données
+### 3. Set up the database
 
 ```bash
 psql -U postgres -c "CREATE DATABASE bibliotheque;"
@@ -83,16 +82,16 @@ psql -U postgres -d bibliotheque -f library.sql
 psql -U postgres -d bibliotheque -f remplirTables.sql
 ```
 
-### 4. Lancer l'application
+### 4. Run the application
 
-**Méthode recommandée** — compiler puis exécuter (lancement instantané) :
+**Recommended** — build then run (faster startup):
 
 ```bash
 go build -o bibliotheque.exe .
 .\bibliotheque.exe
 ```
 
-**Alternative rapide** — sans compilation (plus lent au démarrage) :
+**Quick alternative** — run without building (slower startup):
 
 ```bash
 go run main.go
@@ -100,33 +99,33 @@ go run main.go
 
 ---
 
-## Connexion
+## Login
 
-Au lancement, entrer les informations de connexion dans le formulaire :
+On startup, enter your database credentials in the login form:
 
-| Champ          | Valeur par défaut |
-|----------------|-------------------|
-| Hôte           | `localhost`       |
-| Port           | `5432`            |
-| Utilisateur    | `postgres`        |
-| Mot de passe   | `postgres`        |
-| Base de données| `bibliotheque`    |
+| Field    | Default value  |
+|----------|----------------|
+| Host     | `localhost`    |
+| Port     | `5432`         |
+| User     | `postgres`     |
+| Password | `postgres`     |
+| Database | `bibliotheque` |
 
 ---
 
-## Structure du projet
+## Project Structure
 
 ```
-IFT2935Projet/
+library-management/
 ├── assets/
-│   ├── icon.png                     # Icône de l'application
+│   ├── icon.png
 │   ├── screenshot_connexion.png
 │   ├── screenshot_retard.png
 │   ├── screenshot_emprunts_livr.png
 │   └── screenshot_situation.png
-├── main.go                          # Code source principal
-├── library.sql                      # Schéma de la base de données
-├── remplirTables.sql                # Données de test
+├── main.go
+├── library.sql
+├── remplirTables.sql
 ├── LICENSE
 ├── go.mod
 └── go.sum
