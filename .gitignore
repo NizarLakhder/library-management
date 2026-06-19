@@ -6,8 +6,8 @@
 # Compiled binaries
 *.exe
 *.app
-DevoirBibliotheque
-DevoirBibliotheque.app/
+library-management
+library-management.app/
 
 # IDE
 .vscode/

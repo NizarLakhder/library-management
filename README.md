@@ -78,8 +78,8 @@ go mod download
 
 ```bash
 psql -U postgres -c "CREATE DATABASE bibliotheque;"
-psql -U postgres -d bibliotheque -f library.sql
-psql -U postgres -d bibliotheque -f remplirTables.sql
+psql -U postgres -d bibliotheque -f schema.sql
+psql -U postgres -d bibliotheque -f seed.sql
 ```
 
 ### 4. Run the application
@@ -115,18 +115,33 @@ On startup, enter your database credentials in the login form:
 
 ## Project Structure
 
+The code is split by responsibility under `internal/`, keeping the database and
+query logic free of any UI dependency (so it builds and tests without CGo):
+
 ```
 library-management/
-├── assets/
-│   ├── icon.png
-│   ├── screenshot_connexion.png
-│   ├── screenshot_retard.png
-│   ├── screenshot_emprunts_livr.png
-│   └── screenshot_situation.png
-├── main.go
-├── library.sql
-├── remplirTables.sql
+├── assets/                  # icon + screenshots
+├── internal/
+│   ├── models/              # GORM entities mapped to the SQL schema
+│   ├── database/            # DSN building, connection, validation (+ tests)
+│   ├── queries/             # the 8 analytical reports (+ unit & integration tests)
+│   └── ui/                  # Fyne window, form, table
+├── main.go                  # entry point — wires queries into the UI
+├── schema.sql               # schema (DDL)
+├── seed.sql                 # seed data
 ├── LICENSE
 ├── go.mod
 └── go.sum
+```
+
+## Tests
+
+```bash
+# Fast unit tests (no database required)
+go test ./...
+
+# Integration tests against a real PostgreSQL instance
+TEST_DB_HOST=localhost TEST_DB_PORT=5432 TEST_DB_USER=postgres \
+TEST_DB_PASSWORD=postgres TEST_DB_NAME=bibliotheque \
+go test -tags integration ./internal/queries/
 ```
