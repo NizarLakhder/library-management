@@ -1,4 +1,4 @@
-module DevoirBibliotheque
+module github.com/NizarLakhder/library-management
 
 go 1.24.2
 
