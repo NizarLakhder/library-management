@@ -1,5 +1,6 @@
 # Library Management
 
+[![CI](https://github.com/NizarLakhder/library-management/actions/workflows/ci.yml/badge.svg)](https://github.com/NizarLakhder/library-management/actions/workflows/ci.yml)
 ![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?style=flat&logo=postgresql&logoColor=white)
 ![Fyne](https://img.shields.io/badge/Fyne-5C9BF5?style=flat)

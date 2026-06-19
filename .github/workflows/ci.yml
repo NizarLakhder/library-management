@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # Spin up a throwaway PostgreSQL so the integration tests run in CI too.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bibliotheque
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DB_HOST: localhost
+      TEST_DB_PORT: 5432
+      TEST_DB_USER: postgres
+      TEST_DB_PASSWORD: postgres
+      TEST_DB_NAME: bibliotheque
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Fyne needs a C compiler and OpenGL/X11 headers to build the UI package.
+      - name: Install Fyne system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev postgresql-client
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test ./...
+
+      - name: Load schema and seed data
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d bibliotheque -f schema.sql
+          psql -h localhost -U postgres -d bibliotheque -f seed.sql
+
+      - name: Integration tests
+        run: go test -tags integration ./internal/queries/ ./internal/commands/
