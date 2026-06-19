@@ -24,6 +24,8 @@ A desktop library management application built with Go and Fyne, using PostgreSQ
 
 ## Features
 
+**Read (reports)**
+
 - Connect to a PostgreSQL database via a login form
 - View **overdue loans** (unreturned after 14 days)
 - Rank **most popular authors** by number of loans
@@ -33,6 +35,13 @@ A desktop library management application built with Go and Fyne, using PostgreSQ
 - **Loans by literary genre** breakdown
 - **Loans per book** count
 - **Member status** overview (active loans, overdue)
+
+**Manage (writes)**
+
+- **Add a member**
+- **Add a book** (with its author and copies, in one transaction)
+- **Borrow** a copy (refused if it is already on loan)
+- **Return** a copy
 
 ---
 
@@ -125,7 +134,8 @@ library-management/
 │   ├── models/              # GORM entities mapped to the SQL schema
 │   ├── database/            # DSN building, connection, validation (+ tests)
 │   ├── queries/             # the 8 analytical reports (+ unit & integration tests)
-│   └── ui/                  # Fyne window, form, table
+│   ├── commands/            # write operations: add/borrow/return (+ unit & integration tests)
+│   └── ui/                  # Fyne window, form, table, dialogs
 ├── main.go                  # entry point — wires queries into the UI
 ├── schema.sql               # schema (DDL)
 ├── seed.sql                 # seed data
@@ -140,8 +150,8 @@ library-management/
 # Fast unit tests (no database required)
 go test ./...
 
-# Integration tests against a real PostgreSQL instance
+# Integration tests against a real PostgreSQL instance (reports + CRUD cycle)
 TEST_DB_HOST=localhost TEST_DB_PORT=5432 TEST_DB_USER=postgres \
 TEST_DB_PASSWORD=postgres TEST_DB_NAME=bibliotheque \
-go test -tags integration ./internal/queries/
+go test -tags integration ./internal/queries/ ./internal/commands/
 ```
