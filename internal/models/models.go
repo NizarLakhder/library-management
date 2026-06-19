@@ -21,7 +21,7 @@ type LivreInfo struct {
 	Isbn        string       `gorm:"primaryKey;column:isbn"`
 	Titre       string       `gorm:"column:titre;not null"`
 	Genre       string       `gorm:"column:genre"`
-	Auteurs     []*Auteur    `gorm:"many2many:livre_auteur;"`
+	Auteurs     []*Auteur    `gorm:"many2many:livre_auteur;foreignKey:Isbn;joinForeignKey:isbn;references:AuteurID;joinReferences:auteur_id"`
 	Exemplaires []Exemplaire `gorm:"foreignKey:Isbn"`
 }
 
@@ -43,7 +43,7 @@ type Auteur struct {
 	AuteurID int          `gorm:"primaryKey;column:auteur_id"`
 	Nom      string       `gorm:"column:nom;not null"`
 	Prenom   string       `gorm:"column:prenom"`
-	Livres   []*LivreInfo `gorm:"many2many:livre_auteur;"`
+	Livres   []*LivreInfo `gorm:"many2many:livre_auteur;foreignKey:AuteurID;joinForeignKey:auteur_id;references:Isbn;joinReferences:isbn"`
 }
 
 func (Auteur) TableName() string { return "auteur" }
