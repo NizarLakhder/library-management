@@ -4,17 +4,21 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
 	"gorm.io/gorm"
 
+	"github.com/NizarLakhder/library-management/internal/commands"
 	"github.com/NizarLakhder/library-management/internal/database"
 	"github.com/NizarLakhder/library-management/internal/queries"
 )
@@ -81,32 +85,39 @@ func Run(qs []queries.Query) {
 		}
 	}
 
+	// runQuery executes a report and renders it. currentQuery remembers the last
+	// one so the table can be refreshed after a write operation.
+	var currentQuery *queries.Query
+	runQuery := func(q queries.Query) {
+		newData, err := q.Execute(db)
+		if err != nil {
+			queryErrorLabel.SetText(fmt.Sprintf("Erreur: %v", err))
+			queryErrorLabel.Show()
+			tableData = [][]string{{""}}
+		} else {
+			queryErrorLabel.SetText("")
+			queryErrorLabel.Hide()
+			tableData = newData
+
+			numColsData := 0
+			if len(tableData) > 0 {
+				numColsData = len(tableData[0])
+			}
+			maxColsToSet := min(numColsData, len(q.ColumnWidths))
+			for i := range maxColsToSet {
+				resultsTable.SetColumnWidth(i, q.ColumnWidths[i])
+			}
+		}
+		resultsTable.Refresh()
+	}
+
 	for _, q := range qs {
 		query := q
 		btn := widget.NewButton(query.Label, nil)
 		btn.OnTapped = func() {
 			highlightActive(btn)
-
-			newData, err := query.Execute(db)
-			if err != nil {
-				queryErrorLabel.SetText(fmt.Sprintf("Erreur: %v", err))
-				queryErrorLabel.Show()
-				tableData = [][]string{{""}}
-			} else {
-				queryErrorLabel.SetText("")
-				queryErrorLabel.Hide()
-				tableData = newData
-
-				numColsData := 0
-				if len(tableData) > 0 {
-					numColsData = len(tableData[0])
-				}
-				maxColsToSet := min(numColsData, len(query.ColumnWidths))
-				for i := range maxColsToSet {
-					resultsTable.SetColumnWidth(i, query.ColumnWidths[i])
-				}
-			}
-			resultsTable.Refresh()
+			currentQuery = &query
+			runQuery(query)
 		}
 		btn.Disable()
 		queryButtons = append(queryButtons, btn)
@@ -114,8 +125,26 @@ func Run(qs []queries.Query) {
 	}
 	queryButtonBox := container.NewHBox(queryButtonBoxItems...)
 
+	// refreshCurrentReport re-runs the last selected report so the table reflects
+	// a write that just happened.
+	refreshCurrentReport := func() {
+		if currentQuery != nil {
+			runQuery(*currentQuery)
+		}
+	}
+
+	// Management (write) actions. The connection is read at click time via the
+	// getter so the actions always use the live *gorm.DB.
+	actionButtons := newActionButtons(myWindow, func() *gorm.DB { return db }, refreshCurrentReport)
+	actionButtonBoxItems := make([]fyne.CanvasObject, len(actionButtons))
+	for i, b := range actionButtons {
+		actionButtonBoxItems[i] = b
+	}
+	actionButtonBox := container.NewHBox(actionButtonBoxItems...)
+
 	setButtons := func(enable bool) {
-		for _, btn := range queryButtons {
+		all := append(append([]*widget.Button{}, queryButtons...), actionButtons...)
+		for _, btn := range all {
 			if enable {
 				btn.Enable()
 			} else {
@@ -166,8 +195,10 @@ func Run(qs []queries.Query) {
 		connectButton,
 		statusLabel,
 		widget.NewSeparator(),
-		widget.NewLabel("Choisir une requête :"),
+		widget.NewLabel("Consulter (lecture) :"),
 		container.NewHScroll(queryButtonBox),
+		widget.NewLabel("Gestion (écriture) :"),
+		container.NewHScroll(actionButtonBox),
 		queryErrorLabel,
 	)
 
@@ -189,4 +220,121 @@ func newEntry(placeholder, value string) *widget.Entry {
 		e.SetText(value)
 	}
 	return e
+}
+
+// newActionButtons builds the disabled-by-default management buttons (add a
+// member, add a book, borrow, return). Each opens a form dialog, runs the
+// matching command on the live connection (dbOf) and, on success, calls onChange
+// to refresh the displayed report.
+func newActionButtons(win fyne.Window, dbOf func() *gorm.DB, onChange func()) []*widget.Button {
+	addAdherent := widget.NewButton("Ajouter un abonné", func() {
+		nom := widget.NewEntry()
+		prenom := widget.NewEntry()
+		statut := newEntry("actif", "")
+		items := []*widget.FormItem{
+			{Text: "Nom", Widget: nom},
+			{Text: "Prénom", Widget: prenom},
+			{Text: "Statut", Widget: statut},
+		}
+		dialog.ShowForm("Ajouter un abonné", "Ajouter", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			a, err := commands.AddAdherent(dbOf(),
+				strings.TrimSpace(nom.Text), strings.TrimSpace(prenom.Text), strings.TrimSpace(statut.Text))
+			if err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Abonné ajouté", fmt.Sprintf("Code abonné : %d", a.CodeAdherant), win)
+			onChange()
+		}, win)
+	})
+
+	addLivre := widget.NewButton("Ajouter un livre", func() {
+		isbn := widget.NewEntry()
+		titre := widget.NewEntry()
+		genre := widget.NewEntry()
+		auteurNom := widget.NewEntry()
+		auteurPrenom := widget.NewEntry()
+		nbExemplaires := newEntry("1", "1")
+		items := []*widget.FormItem{
+			{Text: "ISBN", Widget: isbn},
+			{Text: "Titre", Widget: titre},
+			{Text: "Genre", Widget: genre},
+			{Text: "Auteur (nom)", Widget: auteurNom},
+			{Text: "Auteur (prénom)", Widget: auteurPrenom},
+			{Text: "Nb exemplaires", Widget: nbExemplaires},
+		}
+		dialog.ShowForm("Ajouter un livre", "Ajouter", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			nb, _ := strconv.Atoi(strings.TrimSpace(nbExemplaires.Text))
+			_, err := commands.AddLivre(dbOf(),
+				strings.TrimSpace(isbn.Text), strings.TrimSpace(titre.Text), strings.TrimSpace(genre.Text),
+				strings.TrimSpace(auteurNom.Text), strings.TrimSpace(auteurPrenom.Text), nb)
+			if err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Livre ajouté", "Le livre et ses exemplaires ont été créés.", win)
+			onChange()
+		}, win)
+	})
+
+	borrow := widget.NewButton("Emprunter", func() {
+		code := widget.NewEntry()
+		exID := widget.NewEntry()
+		items := []*widget.FormItem{
+			{Text: "Code abonné", Widget: code},
+			{Text: "ID exemplaire", Widget: exID},
+		}
+		dialog.ShowForm("Enregistrer un emprunt", "Emprunter", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			c, errCode := strconv.Atoi(strings.TrimSpace(code.Text))
+			e, errEx := strconv.Atoi(strings.TrimSpace(exID.Text))
+			if errCode != nil || errEx != nil {
+				dialog.ShowError(errors.New("le code abonné et l'ID exemplaire doivent être des nombres"), win)
+				return
+			}
+			if err := commands.BorrowExemplaire(dbOf(), c, e); err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Emprunt enregistré", "L'emprunt a été créé.", win)
+			onChange()
+		}, win)
+	})
+
+	returnCopy := widget.NewButton("Retourner", func() {
+		exID := widget.NewEntry()
+		items := []*widget.FormItem{
+			{Text: "ID exemplaire", Widget: exID},
+		}
+		dialog.ShowForm("Retourner un exemplaire", "Retourner", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			e, err := strconv.Atoi(strings.TrimSpace(exID.Text))
+			if err != nil {
+				dialog.ShowError(errors.New("l'ID exemplaire doit être un nombre"), win)
+				return
+			}
+			if err := commands.ReturnExemplaire(dbOf(), e); err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Retour enregistré", "L'exemplaire a été retourné.", win)
+			onChange()
+		}, win)
+	})
+
+	buttons := []*widget.Button{addAdherent, addLivre, borrow, returnCopy}
+	for _, b := range buttons {
+		b.Disable()
+	}
+	return buttons
 }
