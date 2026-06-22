@@ -37,8 +37,10 @@ func testConfig(t *testing.T) database.Config {
 }
 
 // TestCRUDCycle exercises the full management flow against the database:
-// create a member, create a book (author + exemplaire), borrow the exemplaire, refuse a
-// same-day return, then return it the next day — and cleans everything up.
+// create a member and a book, borrow the exemplaire, refuse a same-day return,
+// return it the next day, update both records, and check the foreign-key-aware
+// delete rules (refused while loans exist, allowed for a loan-free member) — and
+// cleans everything up.
 func TestCRUDCycle(t *testing.T) {
 	db, err := database.Connect(testConfig(t))
 	if err != nil {
@@ -52,6 +54,7 @@ func TestCRUDCycle(t *testing.T) {
 	isbn := fmt.Sprintf("TST-%08d", unique)
 	auteurNom := fmt.Sprintf("AuteurT-%08d", unique)
 	adherentNom := fmt.Sprintf("AbonneT-%08d", unique)
+	adherentNom2 := fmt.Sprintf("AbonneU-%08d", unique) // loan-free member for the delete happy path
 
 	// Cleanup runs even if the test fails partway through.
 	defer func() {
@@ -64,7 +67,7 @@ func TestCRUDCycle(t *testing.T) {
 		db.Exec("DELETE FROM livre_auteur WHERE isbn = ?", isbn)
 		db.Where("isbn = ?", isbn).Delete(&models.LivreInfo{})
 		db.Where("nom = ?", auteurNom).Delete(&models.Auteur{})
-		db.Where("nom = ?", adherentNom).Delete(&models.Adherant{})
+		db.Where("nom IN ?", []string{adherentNom, adherentNom2}).Delete(&models.Adherant{})
 	}()
 
 	// Create a member and a book (with one exemplaire).
@@ -114,5 +117,46 @@ func TestCRUDCycle(t *testing.T) {
 	db.First(&afterReturn, exemplaire.ExemplaireID)
 	if afterReturn.Status != "disponible" {
 		t.Errorf("exemplaire status after return = %q, want disponible", afterReturn.Status)
+	}
+
+	// --- Update ---
+	if err := commands.UpdateAdherent(db, adherent.CodeAdherant, adherentNom, "Test", "inactif"); err != nil {
+		t.Fatalf("UpdateAdherent: %v", err)
+	}
+	var updatedMember models.Adherant
+	db.First(&updatedMember, adherent.CodeAdherant)
+	if updatedMember.Status != "inactif" {
+		t.Errorf("member status after update = %q, want inactif", updatedMember.Status)
+	}
+
+	if err := commands.UpdateLivre(db, isbn, "Titre modifié", "Test"); err != nil {
+		t.Fatalf("UpdateLivre: %v", err)
+	}
+	var updatedBook models.LivreInfo
+	db.First(&updatedBook, "isbn = ?", isbn)
+	if updatedBook.Titre != "Titre modifié" {
+		t.Errorf("book title after update = %q, want \"Titre modifié\"", updatedBook.Titre)
+	}
+
+	// --- Delete refused: both still have loan history ---
+	if err := commands.DeleteAdherent(db, adherent.CodeAdherant); err == nil || !strings.Contains(err.Error(), "emprunts") {
+		t.Errorf("deleting a member with loans should be refused, got %v", err)
+	}
+	if err := commands.DeleteLivre(db, isbn); err == nil || !strings.Contains(err.Error(), "emprunts") {
+		t.Errorf("deleting a book with borrowed copies should be refused, got %v", err)
+	}
+
+	// --- Delete happy path: a loan-free member can be removed ---
+	freshMember, err := commands.AddAdherent(db, adherentNom2, "Test", "")
+	if err != nil {
+		t.Fatalf("AddAdherent (fresh): %v", err)
+	}
+	if err := commands.DeleteAdherent(db, freshMember.CodeAdherant); err != nil {
+		t.Fatalf("DeleteAdherent (fresh): %v", err)
+	}
+	var remaining int64
+	db.Model(&models.Adherant{}).Where("code_adherant = ?", freshMember.CodeAdherant).Count(&remaining)
+	if remaining != 0 {
+		t.Error("loan-free member should have been deleted")
 	}
 }

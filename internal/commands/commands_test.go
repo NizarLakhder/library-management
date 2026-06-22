@@ -61,3 +61,49 @@ func TestReturnExemplaireValidation(t *testing.T) {
 		t.Errorf("valid input with nil db should return connection error, got %v", err)
 	}
 }
+
+func TestUpdateAdherentValidation(t *testing.T) {
+	if err := UpdateAdherent(nil, 0, "Doe", "John", "actif"); err == nil {
+		t.Error("non-positive code should fail validation")
+	}
+	if err := UpdateAdherent(nil, 1, "", "John", "actif"); err == nil {
+		t.Error("empty nom should fail validation")
+	}
+	err := UpdateAdherent(nil, 1, "Doe", "John", "")
+	if err == nil || !strings.Contains(err.Error(), "non connectée") {
+		t.Errorf("valid input with nil db should return connection error, got %v", err)
+	}
+}
+
+func TestUpdateLivreValidation(t *testing.T) {
+	if err := UpdateLivre(nil, "", "Titre", "Genre"); err == nil {
+		t.Error("empty isbn should fail validation")
+	}
+	if err := UpdateLivre(nil, "isbn", "", "Genre"); err == nil {
+		t.Error("empty titre should fail validation")
+	}
+	err := UpdateLivre(nil, "isbn", "Titre", "Genre")
+	if err == nil || !strings.Contains(err.Error(), "non connectée") {
+		t.Errorf("valid input with nil db should return connection error, got %v", err)
+	}
+}
+
+func TestDeleteAdherentValidation(t *testing.T) {
+	if err := DeleteAdherent(nil, 0); err == nil {
+		t.Error("non-positive code should fail validation")
+	}
+	err := DeleteAdherent(nil, 1)
+	if err == nil || !strings.Contains(err.Error(), "non connectée") {
+		t.Errorf("valid input with nil db should return connection error, got %v", err)
+	}
+}
+
+func TestDeleteLivreValidation(t *testing.T) {
+	if err := DeleteLivre(nil, ""); err == nil {
+		t.Error("empty isbn should fail validation")
+	}
+	err := DeleteLivre(nil, "isbn")
+	if err == nil || !strings.Contains(err.Error(), "non connectée") {
+		t.Errorf("valid input with nil db should return connection error, got %v", err)
+	}
+}

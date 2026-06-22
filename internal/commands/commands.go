@@ -177,3 +177,128 @@ func ReturnExemplaire(db *gorm.DB, exemplaireID int) error {
 		return nil
 	})
 }
+
+// UpdateAdherent modifies an existing member's fields, identified by code.
+// A map update is used so empty-but-valid values are still written (GORM skips
+// struct zero values otherwise).
+func UpdateAdherent(db *gorm.DB, codeAdherant int, nom, prenom, status string) error {
+	if codeAdherant <= 0 {
+		return errors.New("le code de l'abonné doit être positif")
+	}
+	if nom == "" || prenom == "" {
+		return errors.New("le nom et le prénom de l'abonné sont obligatoires")
+	}
+	if status == "" {
+		status = statusActif
+	}
+	if db == nil {
+		return errNotConnected
+	}
+
+	res := db.Model(&models.Adherant{}).
+		Where("code_adherant = ?", codeAdherant).
+		Updates(map[string]any{"nom": nom, "prenom": prenom, "status": status})
+	if res.Error != nil {
+		return fmt.Errorf("modification de l'abonné: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("aucun abonné avec le code %d", codeAdherant)
+	}
+	return nil
+}
+
+// UpdateLivre modifies a book's title and genre (the ISBN is its identifier).
+func UpdateLivre(db *gorm.DB, isbn, titre, genre string) error {
+	if isbn == "" {
+		return errors.New("l'ISBN du livre est obligatoire")
+	}
+	if titre == "" {
+		return errors.New("le titre du livre est obligatoire")
+	}
+	if db == nil {
+		return errNotConnected
+	}
+
+	res := db.Model(&models.LivreInfo{}).
+		Where("isbn = ?", isbn).
+		Updates(map[string]any{"titre": titre, "genre": genre})
+	if res.Error != nil {
+		return fmt.Errorf("modification du livre: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("aucun livre avec l'ISBN %s", isbn)
+	}
+	return nil
+}
+
+// DeleteAdherent removes a member, refusing if the member has any loan history
+// (foreign-key-aware business rule: we never orphan loan records).
+func DeleteAdherent(db *gorm.DB, codeAdherant int) error {
+	if codeAdherant <= 0 {
+		return errors.New("le code de l'abonné doit être positif")
+	}
+	if db == nil {
+		return errNotConnected
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		var loans int64
+		if err := tx.Model(&models.Emprunts{}).
+			Where("code_adherant = ?", codeAdherant).
+			Count(&loans).Error; err != nil {
+			return fmt.Errorf("vérification des emprunts: %w", err)
+		}
+		if loans > 0 {
+			return fmt.Errorf("impossible de supprimer l'abonné %d : il a des emprunts enregistrés", codeAdherant)
+		}
+
+		res := tx.Where("code_adherant = ?", codeAdherant).Delete(&models.Adherant{})
+		if res.Error != nil {
+			return fmt.Errorf("suppression de l'abonné: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return fmt.Errorf("aucun abonné avec le code %d", codeAdherant)
+		}
+		return nil
+	})
+}
+
+// DeleteLivre removes a book together with its copies and author links, refusing
+// if any copy has loan history. Authors are kept (they may be shared with other
+// books). Dependents are deleted first to satisfy the foreign keys.
+func DeleteLivre(db *gorm.DB, isbn string) error {
+	if isbn == "" {
+		return errors.New("l'ISBN du livre est obligatoire")
+	}
+	if db == nil {
+		return errNotConnected
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		var loans int64
+		if err := tx.Model(&models.Emprunts{}).
+			Joins("JOIN exemplaire ON exemplaire.exemplaire_id = emprunts.exemplaire_id").
+			Where("exemplaire.isbn = ?", isbn).
+			Count(&loans).Error; err != nil {
+			return fmt.Errorf("vérification des emprunts: %w", err)
+		}
+		if loans > 0 {
+			return fmt.Errorf("impossible de supprimer le livre %s : un de ses exemplaires a des emprunts enregistrés", isbn)
+		}
+
+		if err := tx.Exec("DELETE FROM livre_auteur WHERE isbn = ?", isbn).Error; err != nil {
+			return fmt.Errorf("suppression des liens auteur: %w", err)
+		}
+		if err := tx.Where("isbn = ?", isbn).Delete(&models.Exemplaire{}).Error; err != nil {
+			return fmt.Errorf("suppression des exemplaires: %w", err)
+		}
+		res := tx.Where("isbn = ?", isbn).Delete(&models.LivreInfo{})
+		if res.Error != nil {
+			return fmt.Errorf("suppression du livre: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return fmt.Errorf("aucun livre avec l'ISBN %s", isbn)
+		}
+		return nil
+	})
+}
