@@ -73,7 +73,7 @@ func overdueThreshold() time.Time {
 // All is the ordered list of analytical reports exposed by the application.
 var All = []Query{
 	{
-		Label:        "Afficher Livres en Retard",
+		Label:        "Livres en Retard",
 		ColumnWidths: []float32{50, 120, 120, 250, 100},
 		Execute: func(db *gorm.DB) ([][]string, error) {
 			if db == nil {
@@ -112,7 +112,7 @@ var All = []Query{
 		},
 	},
 	{
-		Label:        "Afficher Auteurs Populaires",
+		Label:        "Auteurs Populaires",
 		ColumnWidths: []float32{80, 120, 120, 100},
 		Execute: func(db *gorm.DB) ([][]string, error) {
 			if db == nil {
@@ -144,7 +144,7 @@ var All = []Query{
 		},
 	},
 	{
-		Label:        "Afficher Durée Moyenne Emprunt",
+		Label:        "Durée Moyenne Emprunt",
 		ColumnWidths: []float32{200},
 		Execute: func(db *gorm.DB) ([][]string, error) {
 			if db == nil {
@@ -175,7 +175,7 @@ var All = []Query{
 		},
 	},
 	{
-		Label:        "Afficher Livres Jamais Empruntés",
+		Label:        "Livres Jamais Empruntés",
 		ColumnWidths: []float32{150, 350},
 		Execute: func(db *gorm.DB) ([][]string, error) {
 			if db == nil {
