@@ -1,6 +1,7 @@
 // Package ui builds and runs the Fyne desktop window. It owns the connection
-// form, the query buttons and the results table, delegating the actual database
-// work to the database and queries packages.
+// form, the report buttons, the management buttons and the results table,
+// delegating the actual database work to the database, queries and commands
+// packages.
 package ui
 
 import (
@@ -14,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"gorm.io/gorm"
@@ -23,14 +25,14 @@ import (
 	"github.com/NizarLakhder/library-management/internal/queries"
 )
 
-// Run builds the window for the given analytical queries and blocks until it is
-// closed, then releases the database connection.
+// Run builds the window for the given analytical reports (plus the management
+// actions) and blocks until it is closed, then releases the database connection.
 func Run(qs []queries.Query) {
 	myApp := app.New()
 	if r, err := fyne.LoadResourceFromPath("assets/icon.png"); err == nil {
 		myApp.SetIcon(r)
 	}
-	myWindow := myApp.NewWindow("Gestion Bibliothèque - Affichage Tableau (Go/GORM/Fyne)")
+	myWindow := myApp.NewWindow("Gestion Bibliothèque (Go/GORM/Fyne)")
 	myWindow.Resize(fyne.NewSize(800, 600))
 
 	// Connection handle and table contents are owned by the closures below
@@ -41,7 +43,7 @@ func Run(qs []queries.Query) {
 	hostEntry := newEntry("localhost", "localhost")
 	portEntry := newEntry("5432", "5432")
 	userEntry := newEntry("Nom d'utilisateur BD", "")
-	passwordEntry := widget.NewPasswordEntry()
+	passwordEntry := newPasswordEntry()
 	passwordEntry.SetPlaceHolder("Mot de passe BD")
 	dbNameEntry := newEntry("Nom de la base de données", "")
 	statusLabel := widget.NewLabel("Veuillez entrer les informations de connexion et cliquer sur 'Connecter'.")
@@ -64,6 +66,10 @@ func Run(qs []queries.Query) {
 			cell.(*widget.Label).SetText(tableData[id.Row][id.Col])
 		},
 	)
+
+	// Placeholder shown over the empty table until a report is selected.
+	placeholder := widget.NewLabel("Sélectionnez un rapport ci-dessus pour afficher les données.")
+	placeholder.Alignment = fyne.TextAlignCenter
 
 	queryErrorLabel := widget.NewLabel("")
 	queryErrorLabel.Hide()
@@ -89,6 +95,7 @@ func Run(qs []queries.Query) {
 	// one so the table can be refreshed after a write operation.
 	var currentQuery *queries.Query
 	runQuery := func(q queries.Query) {
+		placeholder.Hide()
 		newData, err := q.Execute(db)
 		if err != nil {
 			queryErrorLabel.SetText(fmt.Sprintf("Erreur: %v", err))
@@ -168,10 +175,13 @@ func Run(qs []queries.Query) {
 			statusLabel.SetText(fmt.Sprintf("Erreur Connexion: %v", err))
 			log.Println(err)
 			setButtons(false)
+			database.Close(db)
 			db = nil
 			return
 		}
 
+		// Close any previous connection before replacing it (reconnect).
+		database.Close(db)
 		db = newDB
 		statusLabel.SetText(fmt.Sprintf("Connecté avec succès à '%s'!", cfg.DBName))
 		log.Println("DB connection successful (GORM)!")
@@ -202,7 +212,8 @@ func Run(qs []queries.Query) {
 		queryErrorLabel,
 	)
 
-	myWindow.SetContent(container.NewBorder(topControls, nil, nil, nil, resultsTable))
+	tableArea := container.NewStack(resultsTable, container.NewCenter(placeholder))
+	myWindow.SetContent(container.NewBorder(topControls, nil, nil, nil, tableArea))
 	myWindow.ShowAndRun()
 
 	if err := database.Close(db); err != nil {
@@ -222,21 +233,53 @@ func newEntry(placeholder, value string) *widget.Entry {
 	return e
 }
 
-// newActionButtons builds the disabled-by-default management buttons (add a
-// member, add a book, borrow, return). Each opens a form dialog, runs the
-// matching command on the live connection (dbOf) and, on success, calls onChange
-// to refresh the displayed report.
+// newPasswordEntry avoids Fyne's built-in password revealer, which can panic
+// when it tries to restore focus through a canvas that is no longer available.
+// The custom action button provides the same show/hide behaviour without that
+// fragile focus lookup.
+func newPasswordEntry() *widget.Entry {
+	e := widget.NewEntry()
+	e.Password = true
+
+	var reveal *widget.Button
+	reveal = widget.NewButtonWithIcon("", theme.VisibilityOffIcon(), func() {
+		e.Password = !e.Password
+		if e.Password {
+			reveal.SetIcon(theme.VisibilityOffIcon())
+		} else {
+			reveal.SetIcon(theme.VisibilityIcon())
+		}
+		e.Refresh()
+	})
+	reveal.Importance = widget.LowImportance
+	e.ActionItem = reveal
+
+	return e
+}
+
+// showForm displays a form dialog widened to a comfortable size so the entry
+// fields are actually usable (Fyne's default form dialog is too narrow).
+func showForm(title, confirm, dismiss string, items []*widget.FormItem, callback func(bool), win fyne.Window) {
+	d := dialog.NewForm(title, confirm, dismiss, items, callback, win)
+	d.Resize(fyne.NewSize(520, float32(140+len(items)*48)))
+	d.Show()
+}
+
+// newActionButtons builds the disabled-by-default management buttons (add, edit
+// and delete members and books, plus borrow and return). Each opens a form
+// dialog, runs the matching command on the live connection (dbOf) and, on
+// success, calls onChange to refresh the displayed report.
 func newActionButtons(win fyne.Window, dbOf func() *gorm.DB, onChange func()) []*widget.Button {
 	addAdherent := widget.NewButton("Ajouter un abonné", func() {
-		nom := widget.NewEntry()
-		prenom := widget.NewEntry()
+		nom := newEntry("Tremblay", "")
+		prenom := newEntry("Marie", "")
 		statut := newEntry("actif", "")
 		items := []*widget.FormItem{
-			{Text: "Nom", Widget: nom},
-			{Text: "Prénom", Widget: prenom},
+			{Text: "Nom *", Widget: nom},
+			{Text: "Prénom *", Widget: prenom},
 			{Text: "Statut", Widget: statut},
 		}
-		dialog.ShowForm("Ajouter un abonné", "Ajouter", "Annuler", items, func(ok bool) {
+		showForm("Ajouter un abonné", "Ajouter", "Annuler", items, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -252,21 +295,21 @@ func newActionButtons(win fyne.Window, dbOf func() *gorm.DB, onChange func()) []
 	})
 
 	addLivre := widget.NewButton("Ajouter un livre", func() {
-		isbn := widget.NewEntry()
-		titre := widget.NewEntry()
-		genre := widget.NewEntry()
-		auteurNom := widget.NewEntry()
-		auteurPrenom := widget.NewEntry()
+		isbn := newEntry("978-2-07-036024-5", "")
+		titre := newEntry("Les Misérables", "")
+		genre := newEntry("Roman", "")
+		auteurNom := newEntry("Hugo", "")
+		auteurPrenom := newEntry("Victor", "")
 		nbExemplaires := newEntry("1", "1")
 		items := []*widget.FormItem{
-			{Text: "ISBN", Widget: isbn},
-			{Text: "Titre", Widget: titre},
+			{Text: "ISBN *", Widget: isbn},
+			{Text: "Titre *", Widget: titre},
 			{Text: "Genre", Widget: genre},
-			{Text: "Auteur (nom)", Widget: auteurNom},
+			{Text: "Auteur (nom) *", Widget: auteurNom},
 			{Text: "Auteur (prénom)", Widget: auteurPrenom},
 			{Text: "Nb exemplaires", Widget: nbExemplaires},
 		}
-		dialog.ShowForm("Ajouter un livre", "Ajouter", "Annuler", items, func(ok bool) {
+		showForm("Ajouter un livre", "Ajouter", "Annuler", items, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -290,7 +333,7 @@ func newActionButtons(win fyne.Window, dbOf func() *gorm.DB, onChange func()) []
 			{Text: "Code abonné", Widget: code},
 			{Text: "ID exemplaire", Widget: exID},
 		}
-		dialog.ShowForm("Enregistrer un emprunt", "Emprunter", "Annuler", items, func(ok bool) {
+		showForm("Enregistrer un emprunt", "Emprunter", "Annuler", items, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -314,7 +357,7 @@ func newActionButtons(win fyne.Window, dbOf func() *gorm.DB, onChange func()) []
 		items := []*widget.FormItem{
 			{Text: "ID exemplaire", Widget: exID},
 		}
-		dialog.ShowForm("Retourner un exemplaire", "Retourner", "Annuler", items, func(ok bool) {
+		showForm("Retourner un exemplaire", "Retourner", "Annuler", items, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -332,7 +375,108 @@ func newActionButtons(win fyne.Window, dbOf func() *gorm.DB, onChange func()) []
 		}, win)
 	})
 
-	buttons := []*widget.Button{addAdherent, addLivre, borrow, returnCopy}
+	editAdherent := widget.NewButton("Modifier un abonné", func() {
+		code := widget.NewEntry()
+		nom := widget.NewEntry()
+		prenom := widget.NewEntry()
+		statut := newEntry("actif", "")
+		items := []*widget.FormItem{
+			{Text: "Code abonné", Widget: code},
+			{Text: "Nom", Widget: nom},
+			{Text: "Prénom", Widget: prenom},
+			{Text: "Statut", Widget: statut},
+		}
+		showForm("Modifier un abonné", "Enregistrer", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			c, err := strconv.Atoi(strings.TrimSpace(code.Text))
+			if err != nil {
+				dialog.ShowError(errors.New("le code abonné doit être un nombre"), win)
+				return
+			}
+			if err := commands.UpdateAdherent(dbOf(), c,
+				strings.TrimSpace(nom.Text), strings.TrimSpace(prenom.Text), strings.TrimSpace(statut.Text)); err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Abonné modifié", "Les informations ont été mises à jour.", win)
+			onChange()
+		}, win)
+	})
+
+	editLivre := widget.NewButton("Modifier un livre", func() {
+		isbn := widget.NewEntry()
+		titre := widget.NewEntry()
+		genre := widget.NewEntry()
+		items := []*widget.FormItem{
+			{Text: "ISBN", Widget: isbn},
+			{Text: "Titre", Widget: titre},
+			{Text: "Genre", Widget: genre},
+		}
+		showForm("Modifier un livre", "Enregistrer", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := commands.UpdateLivre(dbOf(),
+				strings.TrimSpace(isbn.Text), strings.TrimSpace(titre.Text), strings.TrimSpace(genre.Text)); err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Livre modifié", "Les informations ont été mises à jour.", win)
+			onChange()
+		}, win)
+	})
+
+	deleteAdherent := widget.NewButton("Supprimer un abonné", func() {
+		code := widget.NewEntry()
+		items := []*widget.FormItem{
+			{Text: "Code abonné", Widget: code},
+		}
+		showForm("Supprimer un abonné", "Supprimer", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			c, err := strconv.Atoi(strings.TrimSpace(code.Text))
+			if err != nil {
+				dialog.ShowError(errors.New("le code abonné doit être un nombre"), win)
+				return
+			}
+			if err := commands.DeleteAdherent(dbOf(), c); err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Abonné supprimé", "L'abonné a été supprimé.", win)
+			onChange()
+		}, win)
+	})
+
+	deleteLivre := widget.NewButton("Supprimer un livre", func() {
+		isbn := widget.NewEntry()
+		items := []*widget.FormItem{
+			{Text: "ISBN", Widget: isbn},
+		}
+		showForm("Supprimer un livre", "Supprimer", "Annuler", items, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := commands.DeleteLivre(dbOf(), strings.TrimSpace(isbn.Text)); err != nil {
+				dialog.ShowError(err, win)
+				return
+			}
+			dialog.ShowInformation("Livre supprimé", "Le livre et ses exemplaires ont été supprimés.", win)
+			onChange()
+		}, win)
+	})
+
+	// Destructive actions get the theme's danger (red) colour.
+	deleteAdherent.Importance = widget.DangerImportance
+	deleteLivre.Importance = widget.DangerImportance
+
+	buttons := []*widget.Button{
+		addAdherent, addLivre, borrow, returnCopy,
+		editAdherent, editLivre, deleteAdherent, deleteLivre,
+	}
 	for _, b := range buttons {
 		b.Disable()
 	}
