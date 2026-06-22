@@ -19,6 +19,8 @@ import (
 	"github.com/NizarLakhder/library-management/internal/commands"
 	"github.com/NizarLakhder/library-management/internal/database"
 	"github.com/NizarLakhder/library-management/internal/models"
+
+	"gorm.io/gorm"
 )
 
 func testConfig(t *testing.T) database.Config {
@@ -104,11 +106,12 @@ func TestCRUDCycle(t *testing.T) {
 		t.Errorf("same-day return should be refused, got %v", err)
 	}
 
-	// Backdate the loan by one day, then the return must succeed.
-	yesterday := time.Now().AddDate(0, 0, -1)
+	// Backdate the loan by one day, then the return must succeed. The date is
+	// computed in SQL (CURRENT_DATE) to avoid any Go/Postgres timezone mismatch
+	// that could otherwise make this test flaky in CI.
 	db.Model(&models.Emprunts{}).
 		Where("exemplaire_id = ? AND date_retour IS NULL", exemplaire.ExemplaireID).
-		Update("date_pret", yesterday)
+		Update("date_pret", gorm.Expr("CURRENT_DATE - INTERVAL '1 day'"))
 
 	if err := commands.ReturnExemplaire(db, exemplaire.ExemplaireID); err != nil {
 		t.Fatalf("ReturnExemplaire: %v", err)
