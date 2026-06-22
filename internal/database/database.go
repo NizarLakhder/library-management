@@ -73,6 +73,7 @@ func Connect(c Config) (*gorm.DB, error) {
 	}
 
 	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close() // avoid leaking the pool when the server is unreachable
 		return nil, fmt.Errorf("ping DB: %w", err)
 	}
 

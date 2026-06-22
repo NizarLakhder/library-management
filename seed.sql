@@ -32,7 +32,7 @@ INSERT INTO livre_auteur (isbn, auteur_id) VALUES
 INSERT INTO exemplaire (isbn, status) VALUES
     ('978-2-07-036024-5', 'disponible'),
     ('978-2-07-036024-5', 'emprunte'),
-    ('978-2-07-040850-4', 'disponible'),
+    ('978-2-07-040850-4', 'emprunte'),
     ('978-2-07-036822-7', 'emprunte'),
     ('978-2-07-041239-6', 'disponible'),
     ('978-2-07-036025-2', 'disponible');

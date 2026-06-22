@@ -50,3 +50,10 @@ CREATE TABLE IF NOT EXISTS emprunts (
     date_retour   DATE CHECK (date_retour > date_pret),
     PRIMARY KEY (code_adherant, exemplaire_id, date_pret)
 );
+
+-- Un exemplaire ne peut avoir qu'un seul emprunt OUVERT à la fois (date_retour
+-- NULL). Cet index unique partiel garantit l'invariant au niveau de la base,
+-- et pas seulement dans le code applicatif — y compris en cas d'accès concurrent.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_emprunt_ouvert
+    ON emprunts (exemplaire_id)
+    WHERE date_retour IS NULL;
