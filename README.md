@@ -117,13 +117,15 @@ go run main.go
 
 On startup, enter your database credentials in the login form:
 
-| Field    | Default value  |
+| Field    | Example value  |
 |----------|----------------|
 | Host     | `localhost`    |
 | Port     | `5432`         |
 | User     | `postgres`     |
 | Password | `postgres`     |
 | Database | `bibliotheque` |
+
+> Only **Host** and **Port** are pre-filled; enter the rest to match your setup.
 
 ---
 
@@ -139,7 +141,7 @@ library-management/
 │   ├── models/              # GORM entities mapped to the SQL schema
 │   ├── database/            # DSN building, connection, validation (+ tests)
 │   ├── queries/             # the 8 analytical reports (+ unit & integration tests)
-│   ├── commands/            # write operations: add/borrow/return (+ unit & integration tests)
+│   ├── commands/            # write operations: add/edit/delete, borrow/return (+ unit & integration tests)
 │   └── ui/                  # Fyne window, form, table, dialogs
 ├── main.go                  # entry point — wires queries into the UI
 ├── schema.sql               # schema (DDL)
