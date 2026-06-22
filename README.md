@@ -13,13 +13,17 @@ A desktop library management application built with Go and Fyne, using PostgreSQ
 
 ## Screenshots
 
-| Login | Overdue Books |
-|:---------:|:----------------:|
-| ![Login](assets/screenshot_connexion.png) | ![Overdue](assets/screenshot_retard.png) |
+### Browse (read)
 
-| Loans per Book | Member Status |
-|:-----------------:|:--------------------:|
-| ![Loans](assets/screenshot_emprunts_livr.png) | ![Status](assets/screenshot_situation.png) |
+| Login | Overdue loans | Member status |
+|:---:|:---:|:---:|
+| <img src="assets/screenshot_connexion.png" width="300"> | <img src="assets/screenshot_retard.png" width="300"> | <img src="assets/screenshot_situation.png" width="300"> |
+
+### Manage (write)
+
+| Management actions | Add a book | Delete refused (data integrity) |
+|:---:|:---:|:---:|
+| <img src="assets/screenshot_gestion.png" width="300"> | <img src="assets/screenshot_ajout_livre.png" width="300"> | <img src="assets/screenshot_refus_suppression.png" width="300"> |
 
 ---
 
@@ -39,8 +43,8 @@ A desktop library management application built with Go and Fyne, using PostgreSQ
 
 **Manage (writes)**
 
-- **Add a member**
-- **Add a book** (with its author and copies, in one transaction)
+- **Add / edit / delete a member** — deletion is refused if the member has loan history
+- **Add / edit / delete a book** — creation and deletion are transactional; deletion is refused if a copy has loan history
 - **Borrow** a copy (refused if it is already on loan)
 - **Return** a copy
 
